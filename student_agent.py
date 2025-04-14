@@ -286,28 +286,30 @@ class NTupleNetwork:
             key = tuple(board[i][j] for i, j in tuple_indices)
             self.weights[key] += learning_rate * error
 
+def is_move_legal(board, action):
+    """Check if the specified move is legal (i.e., changes the board)"""
+    temp_env = Game2048Env()
+    temp_env.board = board.copy()
+    return temp_env.is_move_legal(action)
+
 class MCTSNode:
-    def __init__(self, state, env, parent=None, action=None):
+    def __init__(self, state, parent=None, action=None):
         self.state = state.copy()
-        self.env = env  # Store an environment instance
         self.parent = parent
         self.action = action
         self.children = {}
-        self.visits = 0
+        self.visits=None, action=None):
+        self.state = state.copy = 0
         self.value = 0
         self.untried_actions = self._get_legal_actions()
 
     def _get_legal_actions(self):
+        """Get all legal actions for the current state"""
         legal = []
         for action in range(4):
-            # Use the stored environment to check if the move is legal.
-            # Make sure to simulate the move on a copy of the state.
-            temp_env = copy.deepcopy(self.env)
-            temp_env.board = self.state.copy()
-            if temp_env.is_move_legal(action):
+            if is_move_legal(self.state, action):  # Use the global function
                 legal.append(action)
-        return legal
-        
+        return legal       
     
     def select_child(self, c_param=1.4):
         """Select child node using UCB1"""
