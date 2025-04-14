@@ -254,43 +254,38 @@ class NTupleNetwork:
         self.tuples = self._generate_tuples()
         
     def _generate_tuples(self):
-        """Generate n-tuple patterns"""
+        """Generate simple n-tuple patterns.
+           For demonstration, we use a few simple patterns.
+        """
         tuples = []
-        # Main diagonal tuple
+        # Main diagonal
         tuples.append([(i, i) for i in range(self.board_size)])
-        # Anti-diagonal tuple
-        tuples.append([(i, self.board_size-1-i) for i in range(self.board_size)])
-        # First row and column
-        tuples.append([(0, i) for i in range(self.board_size)])
+        # Anti-diagonal
+        tuples.append([(i, self.board_size - 1 - i) for i in range(self.board_size)])
+        # First row
+        tuples.append([(0, j) for j in range(self.board_size)])
+        # First column
         tuples.append([(i, 0) for i in range(self.board_size)])
         return tuples[:self.n_tuples]
     
-    def get_tuple_value(self, board, tuple_indices):
-        """Get the value of a specific tuple"""
-        key = tuple(board[i][j] for i, j in tuple_indices)
-        if key not in self.weights:
-            self.weights[key] = np.random.random() * 0.1
-        return self.weights[key]
-    
     def evaluate(self, board):
-        """Evaluate the entire board"""
-        return sum(self.get_tuple_value(board, tuple_indices) 
-                  for tuple_indices in self.tuples)
+        total = 0.0
+        for pattern in self.tuples:
+            key = tuple(board[i][j] for i, j in pattern)
+            if key not in self.weights:
+                self.weights[key] = random.random() * 0.1
+            total += self.weights[key]
+        return total
     
     def update(self, board, target, learning_rate=0.1):
-        """Update weights based on TD error"""
         current = self.evaluate(board)
         error = target - current
-        
-        for tuple_indices in self.tuples:
-            key = tuple(board[i][j] for i, j in tuple_indices)
+        for pattern in self.tuples:
+            key = tuple(board[i][j] for i, j in pattern)
+            if key not in self.weights:
+                self.weights[key] = random.random() * 0.1
             self.weights[key] += learning_rate * error
 
-def is_move_legal(board, action):
-    """Check if the specified move is legal (i.e., changes the board)"""
-    temp_env = Game2048Env()
-    temp_env.board = board.copy()
-    return temp_env.is_move_legal(action)
 
 class MCTSNode:
     def __init__(self, state, parent=None, action=None):
@@ -298,39 +293,33 @@ class MCTSNode:
         self.parent = parent
         self.action = action
         self.children = {}
-        self.visits=None, action=None):
-        self.state = state.copy = 0
-        self.value = 0
+        self.visits = 0
+        self.value = 0.0
         self.untried_actions = self._get_legal_actions()
-
+    
     def _get_legal_actions(self):
-        """Get all legal actions for the current state"""
         legal = []
         for action in range(4):
-            if is_move_legal(self.state, action):  # Use the global function
+            if is_move_legal(self.state, action):
                 legal.append(action)
-        return legal       
+        return legal
     
     def select_child(self, c_param=1.4):
-        """Select child node using UCB1"""
-        choices = [(child,
-                   child.value / (child.visits + 1e-6) +
-                   c_param * np.sqrt(2 * np.log(self.visits + 1) / (child.visits + 1e-6)))
-                  for action, child in self.children.items()]
-        
-        _, child = max(choices, key=lambda x: x[1])
-        return child
+        choices = []
+        for action, child in self.children.items():
+            avg = child.value / (child.visits + 1e-6)
+            exploration = c_param * math.sqrt(math.log(self.visits + 1) / (child.visits + 1e-6))
+            choices.append((child, avg + exploration))
+        return max(choices, key=lambda x: x[1])[0]
     
     def expand(self):
-        """Expand by trying an untried action"""
         action = self.untried_actions.pop()
-        next_state = simulate_move(self.state.copy(), action)
-        child = MCTSNode(next_state, parent=self, action=action)
+        new_state = simulate_move(self.state.copy(), action)
+        child = MCTSNode(new_state, parent=self, action=action)
         self.children[action] = child
         return child
     
     def update(self, result):
-        """Update node statistics"""
         self.visits += 1
         self.value += result
 
@@ -341,33 +330,37 @@ class MCTS:
         self.num_simulations = num_simulations
     
     def search(self):
-        """Perform MCTS search"""
         for _ in range(self.num_simulations):
             node = self.root
-            
             # Selection
-            while not node.untried_actions and node.children:
+            while node.untried_actions == [] and node.children:
                 node = node.select_child()
-            
             # Expansion
             if node.untried_actions:
                 node = node.expand()
-            
-            # Simulation
-            value = self.simulate(node.state)
-            
+            # Simulation: use the ntuple network evaluation as simulation result
+            sim_result = self.simulate(node.state)
             # Backpropagation
-            while node:
-                node.update(value)
+            while node is not None:
+                node.update(sim_result)
                 node = node.parent
-        
-        # Return best action
-        return max(self.root.children.items(),
-                  key=lambda x: x[1].visits)[0]
+        return max(self.root.children.items(), key=lambda item: item[1].visits)[0]
     
     def simulate(self, state):
-        """Run a simulation from the given state"""
         return self.ntuple_network.evaluate(state)
+
+
+def simulate_move(board, action):
+    env_sim = Game2048Env()
+    env_sim.board = board.copy()
+    next_state, _, _, _ = env_sim.step(action)
+    return next_state
+
+def is_move_legal(board, action):
+    env_sim = Game2048Env()
+    env_sim.board = board.copy()
+    return env_sim.is_move_legal(action)
+
 
 def get_action(state, score):
     """
